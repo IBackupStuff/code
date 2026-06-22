@@ -111,7 +111,6 @@ import {
 	add_project_from_path,
 	duplicate,
 	edit,
-	get,
 	get_linked_modpack_content,
 	list,
 	remove_project,
