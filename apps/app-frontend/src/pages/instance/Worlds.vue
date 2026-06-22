@@ -220,7 +220,7 @@ import {
 } from '@/helpers/worlds.ts'
 import { injectServerInstall } from '@/providers/server-install'
 import { handleSevereError } from '@/store/error.js'
-import { ensureManagedServerWorldExists, getServerAddress } from '@/store/install'
+import { ensureManagedServerWorldExists, getServerAddress } from '@/helpers/worlds'
 
 const messages = defineMessages({
 	removeServerTitle: {

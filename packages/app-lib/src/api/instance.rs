@@ -23,9 +23,11 @@ pub use self::install::{get_optimal_jre_key, install};
 pub use self::lifecycle::{create, duplicate, edit, edit_icon, remove};
 pub use self::paths::{get_full_path, get_mod_full_path};
 pub use self::projects::{
-    add_project_from_path, add_project_from_version, remove_project,
-    repair_managed_modrinth, toggle_disable_project, update_all_projects,
-    update_managed_modrinth_version, update_project,
+    InstallProjectWithDependenciesRequest, add_project_from_path,
+    add_project_from_version, install_project_with_dependencies,
+    remove_project, repair_managed_modrinth,
+    switch_project_version_with_dependencies, toggle_disable_project,
+    update_all_projects, update_managed_modrinth_version, update_project,
 };
 pub use self::run::{
     QuickPlayType, kill, run, try_update_playtime_by_instance_id,
