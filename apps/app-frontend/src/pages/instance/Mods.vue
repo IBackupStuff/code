@@ -167,7 +167,8 @@ let savedModalState: ModpackContentModalState | null = null
 
 const { formatMessage } = useVIntl()
 const { handleError, addNotification } = injectNotificationManager()
-const { installingItems } = injectContentInstall()
+const { installingItems, installRevisionByInstance, installFailureRevisionByInstance } =
+	injectContentInstall()
 const router = useRouter()
 const queryClient = useQueryClient()
 const debug = useDebugLogger('Mods:ContentUpdate')
@@ -183,6 +184,7 @@ const loading = ref(true)
 const projects = ref<ContentItem[]>([])
 
 const installingBuffer = ref<ContentItem[]>([])
+const handledInstallRevision = ref(0)
 
 watch(
 	() => installingItems.value.get(props.instance.id),
@@ -206,10 +208,24 @@ const mergedProjects = computed<ContentItem[]>(() => {
 	const active = installingItems.value.get(props.instance.id)
 	const pending = active ?? installingBuffer.value
 	if (pending.length === 0) return projects.value
-	const realProjectIds = new Set(projects.value.map((p) => p.project?.id).filter(Boolean))
+	const pendingProjectIds = new Set(pending.map((p) => p.project?.id).filter(Boolean))
+	const displayProjects = projects.value.map((project) =>
+		project.project?.id && pendingProjectIds.has(project.project.id)
+			? { ...project, installing: true }
+			: project,
+	)
+	const realProjectIds = new Set(displayProjects.map((p) => p.project?.id).filter(Boolean))
 	const placeholders = pending.filter((item) => !realProjectIds.has(item.project?.id))
-	return placeholders.length > 0 ? [...projects.value, ...placeholders] : projects.value
+	return placeholders.length > 0 ? [...displayProjects, ...placeholders] : displayProjects
 })
+
+watch(
+	() => installFailureRevisionByInstance.value.get(props.instance.id) ?? 0,
+	(revision, previousRevision) => {
+		if (revision === previousRevision) return
+		installingBuffer.value = []
+	},
+)
 
 const linkedModpackProject = ref<ContentModpackCardProject | null>(null)
 const linkedModpackVersion = ref<ContentModpackCardVersion | null>(null)
@@ -830,6 +846,15 @@ async function refreshContentState(cacheBehaviour?: CacheBehaviour) {
 	await refreshModpackContentItems(cacheBehaviour)
 }
 
+watch(
+	() => installRevisionByInstance.value.get(props.instance.id) ?? 0,
+	async (revision) => {
+		if (revision <= handledInstallRevision.value) return
+		handledInstallRevision.value = revision
+		await refreshContentState('must_revalidate')
+	},
+)
+
 async function handleModpackUpdate() {
 	if (!props.instance?.link?.project_id) return
 
@@ -1155,14 +1180,12 @@ provideContentManager({
 					project: linkedModpackProject.value,
 					projectLink: {
 						path: `/project/${linkedModpackProject.value.slug ?? linkedModpackProject.value.id}`,
-						query: { i: props.instance.id },
 					},
 					version: linkedModpackVersion.value ?? undefined,
 					versionLink:
 						linkedModpackProject.value && linkedModpackVersion.value
 							? {
 									path: `/project/${linkedModpackProject.value.slug ?? linkedModpackProject.value.id}/version/${linkedModpackVersion.value.id}`,
-									query: { i: props.instance.id },
 								}
 							: undefined,
 					owner: linkedModpackOwner.value
@@ -1226,7 +1249,7 @@ provideContentManager({
 			icon_url: null,
 		},
 		projectLink: item.project?.id
-			? { path: `/project/${item.project.id}`, query: { i: props.instance.id } }
+			? { path: `/project/${item.project.id}` }
 			: undefined,
 		version: item.version ?? {
 			id: item.file_name,
@@ -1237,7 +1260,6 @@ provideContentManager({
 			item.project?.id && item.version?.id
 				? {
 						path: `/project/${item.project.id}/version/${item.version.id}`,
-						query: { i: props.instance.id },
 					}
 				: undefined,
 		owner: item.owner
@@ -1257,7 +1279,17 @@ type UnlistenFn = () => void
 const initialContentReady = loadInitialContent()
 void initialContentReady.then(restoreModpackContentModalState).catch(handleError)
 
+function getInstallRevision() {
+	return installRevisionByInstance.value.get(props.instance.id) ?? 0
+}
+
 function loadInitialContent() {
+	const installRevision = getInstallRevision()
+	if (installRevision > handledInstallRevision.value) {
+		handledInstallRevision.value = installRevision
+		return initProjects('must_revalidate')
+	}
+
 	if (props.preloadedContent && applyContentData(props.preloadedContent)) {
 		return Promise.resolve()
 	}
